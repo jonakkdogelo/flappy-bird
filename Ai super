@@ -1,0 +1,234 @@
+import pygame
+from pygame.locals import *
+import numpy as np
+from sys import exit
+import os
+import random
+
+pygame.init()
+
+largura_janela, altura_janela = 850, 800
+chãox = 3
+velcenario = 4
+canoseparado = 150
+canofrequencia = 1500
+ultimocano = pygame.time.get_ticks() - canofrequencia
+pass_pipe = False
+pontos = 340
+dif,difi = 0,0
+velo,veloci = 0,0
+alturacanos = []
+mortos = 0
+d1 = 0
+momento = 0
+melhoraleatorio = -1000000
+FPS = 60
+
+colisão = pygame.mixer.Sound('flappy-bird-hit-sound-101soundboards.mp3')
+fonte = pygame.font.SysFont('Arial', 30, True, True)
+pygame.display.set_caption('Flappy Bird')
+tela = pygame.display.set_mode((largura_janela, altura_janela))
+clock = pygame.time.Clock()
+
+pasta_principal = os.path.dirname(__file__)
+pastasprites = os.path.join(pasta_principal,'sprites')
+
+fundo = pygame.image.load('sprites/bg.png')
+chão = pygame.image.load('sprites/ground.png')
+
+class Bird(pygame.sprite.Sprite):
+    def __init__(self,xbird,ybird):
+        pygame.sprite.Sprite.__init__(self)
+        self.imagensbird = []
+        self.index = 0
+        self.num1 = 0
+
+        for i in range(1,4):
+            img = pygame.image.load(f'sprites/bird{i}.png')
+            self.imagensbird.append(img)
+        self.image = self.imagensbird[self.index]
+        self.rect = self.image.get_rect()
+        self.rect.center = [xbird, ybird]
+        self.vel = 0
+        self.pulou = False
+        self.gameover = False
+        self.voar = True
+        self.queropular = 0
+        self.d1 = 0
+        self.alturacerta = 500
+        if melhoraleatorio != -1000000:
+            self.numeroaletorio = melhoraleatorio + random.randint(-10,10)
+        else:
+            self.numeroaletorio = random.randint(-500,500)
+
+    def update(self):
+        global mortos,melhoraleatorio
+        if self.voar == True:
+            self.vel += 0.5
+            if self.vel > 8:
+                self.vel = 8
+            if self.rect.y < 630:
+                self.rect.y += int(self.vel)
+            else:
+                self.gameover = True
+                self.voar = False
+
+        if len(alturacanos) > 0:
+            self.alturacerta = alturacanos[0]+canoseparado//2
+
+        if self.alturacerta-self.rect.y < self.numeroaletorio:
+            self.queropular = 1
+        else:
+            self.queropular = 0
+        if momento == 1:
+            if self.rect.y+50 > self.alturacerta or self.rect.y+5 < self.alturacerta-canoseparado:
+                self.voar = False
+                self.gameover = True
+
+        if self.gameover == False:
+            if self.vel < -5:
+                self.pulou = True
+            else:
+                self.pulou = False
+
+            
+            if self.queropular == 1 and self.pulou == False and self.rect.y > 80:
+                self.pulou == True
+                self.vel = -10
+
+            self.num1 += 1
+            cooldown = 5
+            
+            if self.num1 > cooldown:
+                self.num1 = 0
+                self.index += 1
+                if self.index >= len(self.imagensbird):
+                    self.index = 0  
+            self.image = self.imagensbird[self.index]
+
+            self.image = pygame.transform.rotate(self.imagensbird[self.index], self.vel * -4)
+        else:
+            self.rect.x -= velcenario
+            if self.d1 == 0:
+                self.d1 = 1
+                colisão.play()
+                if mortos == 49:
+                    melhoraleatorio = self.numeroaletorio
+                mortos += 1
+
+class Cano(pygame.sprite.Sprite):
+    def __init__(self,x,y,posição):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load('sprites/pipe.png')
+        self.rect = self.image.get_rect()
+        if posição == 1:
+            self.image = pygame.transform.flip(self.image, False, True)
+            self.rect.bottomleft = [x, y - int(canoseparado / 2)]
+        if posição == -1:
+            self.rect.topleft = [x, y + int(canoseparado / 2)]
+        
+    def update(self):
+        self.rect.x -= velcenario
+        if self.rect.right < 0:
+            self.kill()
+
+birdgrupo = pygame.sprite.Group()
+canogrupo = pygame.sprite.Group()
+birdlista = []
+
+for i in range(50):
+    birdgrupo.add(Bird(100,altura_janela//2))
+    birdlista.append(Bird(100,altura_janela//2))
+
+def atualizar():
+    global chãox,voar,gameover,ultimocano,pass_pipe,pontos,dif,difi,velo,veloci,canoseparado,velcenario,d1,momento
+    tempo = pygame.time.get_ticks()
+    if tempo - ultimocano > canofrequencia:
+        canoaltura = random.randint(-100, 100)
+        canofundo = Cano(largura_janela, int(altura_janela / 2) + canoaltura, -1)
+        canotopo = Cano(largura_janela, int(altura_janela / 2) + canoaltura, 1)
+        canogrupo.add(canofundo)
+        canogrupo.add(canotopo)
+        ultimocano = tempo
+        alturacanos.append(altura_janela//2 + canoaltura)
+    if len(alturacanos) > 2:
+        if d1 >= 40:
+            d1 = 0
+            pontos += 1
+            alturacanos.remove(alturacanos[0])
+        else:
+            d1 += 1
+    
+    if len(canogrupo) > 0:
+        if canogrupo.sprites()[0].rect.left < 120 and canogrupo.sprites()[0].rect.right > 80:
+            momento = 1
+        else:
+            momento = 0
+
+    keys = pygame.key.get_pressed()
+    if keys[K_t]:
+        momento = 1
+
+    if mortos == 50:
+        mensagem = 'Game over! pressione r para voltar a jogar'
+        texto_formatado = fonte.render(mensagem, True, (0,0,0))
+        ret_texto = texto_formatado.get_rect()
+        rein = True
+        while rein:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                
+            if rein:
+                reiniciar()
+                rein = False
+                            
+            ret_texto.center = (largura_janela//2,altura_janela//2)
+            tela.blit(texto_formatado, ret_texto)                
+            pygame.display.update()
+    
+    chãox -= velcenario
+    if abs(chãox) > 35:
+        chãox = 0
+    canogrupo.update()
+
+def reiniciar():
+    global pontos,ultimocano,voar,pass_pipe,canogrupo,birdgrupo,mortos,alturacanos
+    ultimocano = pygame.time.get_ticks() - canofrequencia
+    voar = True
+    pass_pipe = False
+    pontos = 0
+    mortos = 0
+    alturacanos = []
+    birdgrupo = pygame.sprite.Group()
+    for i in range(50):
+        birdgrupo.add(Bird(100,altura_janela//2))
+    canogrupo = pygame.sprite.Group()
+    
+
+def desenhar(tela):
+    print(mortos)
+    tela.blit(fundo,(0,0))
+    tela.blit(chão, (chãox, 668))
+    birdgrupo.draw(tela)
+    birdgrupo.update()
+    canogrupo.draw(tela)
+    mensagem = f'pontos:{pontos}'
+    texto_formatado = fonte.render(mensagem, True, (0,0,0))
+    tela.blit(texto_formatado, (largura_janela-200,10))
+    #if len(alturacanos) > 0:
+        #pygame.draw.rect(tela,(255,255,255),(100,alturacanos[0]-canoseparado//2,300,5))
+
+while True:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            quit()
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    pass
+    atualizar()
+    desenhar(tela)
+    clock.tick(FPS)
+    pygame.display.flip()
